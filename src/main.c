@@ -7,6 +7,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 #include <libxnvme.h>
 
@@ -129,6 +130,7 @@ main(int argc, char **argv)
 	if (dev.max_io_buf > cap_max) {
 		dev.max_io_buf = cap_max;
 	}
+	dev.max_io_buf &= ~(uint32_t)(sysconf(_SC_PAGESIZE) - 1);
 
 	setvbuf(stderr, NULL, _IOLBF, 0);
 
