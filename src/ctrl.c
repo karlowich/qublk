@@ -147,7 +147,7 @@ qublk_ctrl_set_params(struct qublk_dev *dev)
 				.physical_bs_shift = lba_shift,
 				.io_opt_shift = lba_shift,
 				.io_min_shift = lba_shift,
-				.max_sectors = geo->mdts_nbytes >> 9,
+				.max_sectors = dev->max_io_buf >> 9,
 				.dev_sectors = dev_sectors_512,
 			},
 	};
