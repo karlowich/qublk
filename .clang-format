@@ -1,0 +1,21 @@
+# SPDX-FileCopyrightText: Samsung Electronics Co., Ltd
+#
+# SPDX-License-Identifier: BSD-3-Clause
+
+BasedOnStyle: LLVM
+
+AlignConsecutiveBitFields: AcrossEmptyLinesAndComments
+AlignEscapedNewlines: Left
+AlwaysBreakAfterReturnType: All
+BreakBeforeBraces: WebKit
+ColumnLimit: 99
+ContinuationIndentWidth: 8
+IndentGotoLabels: false
+IndentWidth: 8
+InsertBraces: true
+MaxEmptyLinesToKeep: 1
+ForEachMacros:
+  - io_uring_for_each_cqe
+SortIncludes: Never
+TabWidth: 8
+UseTab: ForContinuationAndIndentation
