@@ -7,6 +7,7 @@ project(
     'c_std=gnu11',
     'warning_level=2',
     'b_ndebug=if-release',
+    'buildtype=release',
   ],
 )
 
