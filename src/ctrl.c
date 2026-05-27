@@ -142,7 +142,7 @@ qublk_ctrl_set_params(struct qublk_dev *dev)
 		.types = UBLK_PARAM_TYPE_BASIC,
 		.basic =
 			{
-				.attrs = 0,
+				.attrs = UBLK_ATTR_VOLATILE_CACHE | UBLK_ATTR_FUA,
 				.logical_bs_shift = lba_shift,
 				.physical_bs_shift = lba_shift,
 				.io_opt_shift = lba_shift,

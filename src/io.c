@@ -150,6 +150,13 @@ dispatch(struct qublk_queue *q, struct qublk_io *io)
 	if (!ctx) {
 		return -EBUSY;
 	}
+	/*
+	 * The ctx is pooled per xnvme queue and reused across commands.
+	 * xnvme_nvm_{read,write} only writes opcode/nsid/slba/nlb, so other
+	 * fields in cdw12 (fua, lr, prinfo, ...) carry over from the prior
+	 * command. Zero the NVMe command header before each submit.
+	 */
+	memset(&ctx->cmd, 0, sizeof(ctx->cmd));
 	xnvme_cmd_ctx_set_cb(ctx, on_xnvme_complete, io);
 
 	switch (op) {
@@ -161,6 +168,9 @@ dispatch(struct qublk_queue *q, struct qublk_io *io)
 	case UBLK_IO_OP_WRITE:
 		slba = iod->start_sector >> (lba_shift - 9);
 		nlb = (uint16_t)(((iod->nr_sectors << 9) >> lba_shift) - 1);
+		if (iod->op_flags & UBLK_IO_F_FUA) {
+			ctx->cmd.nvm.fua = 1;
+		}
 		rc = xnvme_nvm_write(ctx, nsid, slba, nlb, io->buf, NULL);
 		break;
 	case UBLK_IO_OP_FLUSH:
