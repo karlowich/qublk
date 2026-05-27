@@ -381,6 +381,15 @@ io_thread_main(void *arg)
 		return NULL;
 	}
 
+	rc = io_uring_register_ring_fd(&q->ring);
+	if (rc < 0) {
+		fprintf(stderr, "io_uring_register_ring_fd: %s\n", strerror(-rc));
+		dev->io_init_rc = rc;
+		sem_post(&dev->io_ready);
+		io_uring_queue_exit(&q->ring);
+		return NULL;
+	}
+
 	dev->io_init_rc = submit_initial_fetches(dev);
 	sem_post(&dev->io_ready);
 	if (dev->io_init_rc == 0) {
