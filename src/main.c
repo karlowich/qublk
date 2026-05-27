@@ -38,6 +38,7 @@ static const struct option qublk_opts[] = {
 	{"depth", required_argument, NULL, 'd'},
 	{"dev-id", required_argument, NULL, 'i'},
 	{"max-io-bytes", required_argument, NULL, 'm'},
+	{"nr-queues", required_argument, NULL, 'q'},
 	{"help", no_argument, NULL, 'h'},
 	{0},
 };
@@ -46,12 +47,14 @@ static void
 usage(const char *prog)
 {
 	fprintf(stderr,
-		"usage: %s --dev-uri URI [--be BE] [--depth N] [--dev-id N] [--max-io-bytes N]\n"
+		"usage: %s --dev-uri URI [--be BE] [--depth N] [--dev-id N] [--max-io-bytes N] "
+		"[--nr-queues N]\n"
 		"  URI            xNVMe device URI (e.g. /dev/nvme0n1, 0000:01:00.0)\n"
 		"  BE             xNVMe backend (upcie, io_uring, io_uring_cmd, libaio, ...)\n"
 		"  --depth N      per-queue depth, power of 2 (default: 64)\n"
 		"  --dev-id N     requested ublk dev id (default: -1 / auto)\n"
-		"  --max-io-bytes N  per-IO buffer size (default: min(1MiB, MDTS))\n",
+		"  --max-io-bytes N  per-IO buffer size (default: min(1MiB, MDTS))\n"
+		"  --nr-queues N  number of ublk hardware queues (default: 1)\n",
 		prog);
 }
 
@@ -72,7 +75,7 @@ main(int argc, char **argv)
 	uint32_t want_max_io = 0, cap_max;
 	int c, sig;
 
-	while ((c = getopt_long(argc, argv, "u:b:d:i:m:h", qublk_opts, NULL)) != -1) {
+	while ((c = getopt_long(argc, argv, "u:b:d:i:m:q:h", qublk_opts, NULL)) != -1) {
 		switch (c) {
 		case 'u':
 			uri = optarg;
@@ -89,6 +92,9 @@ main(int argc, char **argv)
 		case 'm':
 			want_max_io = (uint32_t)strtoul(optarg, NULL, 0);
 			break;
+		case 'q':
+			dev.nr_queues = (uint16_t)atoi(optarg);
+			break;
 		case 'h':
 			usage(argv[0]);
 			return 0;
@@ -104,6 +110,10 @@ main(int argc, char **argv)
 	if (!is_pow2(dev.depth) || dev.depth > QUBLK_MAX_QUEUE_DEPTH) {
 		fprintf(stderr, "qublk: --depth must be power of 2, <= %u\n",
 			QUBLK_MAX_QUEUE_DEPTH);
+		return 2;
+	}
+	if (dev.nr_queues < 1 || dev.nr_queues > UBLK_MAX_NR_QUEUES) {
+		fprintf(stderr, "qublk: --nr-queues must be in [1, %u]\n", UBLK_MAX_NR_QUEUES);
 		return 2;
 	}
 
@@ -153,8 +163,9 @@ main(int argc, char **argv)
 	if (qublk_ctrl_add_dev(&dev) < 0) {
 		goto err_ctrl;
 	}
-	fprintf(stderr, "qublk: added ublk dev id=%d depth=%u max_io=%u backend=%s uri=%s\n",
-		dev.dev_id, dev.depth, dev.max_io_buf, be ? be : "(auto)", uri);
+	fprintf(stderr,
+		"qublk: added ublk dev id=%d nr_queues=%u depth=%u max_io=%u backend=%s uri=%s\n",
+		dev.dev_id, dev.nr_queues, dev.depth, dev.max_io_buf, be ? be : "(auto)", uri);
 
 	if (qublk_ctrl_set_params(&dev) < 0) {
 		goto err_added;
