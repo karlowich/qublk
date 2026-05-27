@@ -12,6 +12,28 @@
 #include <liburing.h>
 #include <libxnvme.h>
 
+#ifndef IORING_SETUP_SINGLE_ISSUER
+#define IORING_SETUP_SINGLE_ISSUER (1U << 12)
+#endif
+#ifndef IORING_SETUP_DEFER_TASKRUN
+#define IORING_SETUP_DEFER_TASKRUN (1U << 13)
+#endif
+
+static int
+init_ring(struct qublk_queue *q)
+{
+	struct io_uring_params p = {0};
+	int rc;
+
+	p.flags = IORING_SETUP_SINGLE_ISSUER | IORING_SETUP_DEFER_TASKRUN;
+	rc = io_uring_queue_init_params(q->depth, &q->ring, &p);
+	if (rc == -EINVAL) {
+		memset(&p, 0, sizeof(p));
+		rc = io_uring_queue_init_params(q->depth, &q->ring, &p);
+	}
+	return rc;
+}
+
 static void
 prep_io_uring_cmd(struct io_uring_sqe *sqe, int fd, uint32_t cmd_op,
 		  const struct ublksrv_io_cmd *cmd, uint64_t user_data)
@@ -194,12 +216,6 @@ qublk_io_init(struct qublk_dev *dev)
 		return -errno;
 	}
 
-	rc = io_uring_queue_init(q->depth, &q->ring, 0);
-	if (rc < 0) {
-		fprintf(stderr, "io_uring_queue_init(io): %s\n", strerror(-rc));
-		goto err;
-	}
-
 	q->iod_arr_bytes = (size_t)q->depth * sizeof(struct ublksrv_io_desc);
 	q->iod_arr = mmap(NULL, q->iod_arr_bytes, PROT_READ, MAP_SHARED, q->ublkc_fd,
 			  UBLKSRV_CMD_BUF_OFFSET);
@@ -291,8 +307,6 @@ qublk_io_fini(struct qublk_dev *dev)
 		q->iod_arr = NULL;
 	}
 	if (q->ublkc_fd >= 0) {
-		/* io_uring_queue_exit assumes init succeeded; mirror that. */
-		io_uring_queue_exit(&q->ring);
 		close(q->ublkc_fd);
 		q->ublkc_fd = -1;
 	}
@@ -307,7 +321,7 @@ io_loop(struct qublk_dev *dev)
 	int xp;
 
 	while (!dev->stop) {
-		io_uring_submit(&q->ring);
+		io_uring_submit_and_get_events(&q->ring);
 
 		count = 0;
 		io_uring_for_each_cqe (&q->ring, head, cqe) {
@@ -323,7 +337,7 @@ io_loop(struct qublk_dev *dev)
 
 	/* Drain: keep pumping until xnvme queue empty and no more ublk CQEs. */
 	for (int idle = 0; idle < 1024;) {
-		io_uring_submit(&q->ring);
+		io_uring_submit_and_get_events(&q->ring);
 		count = 0;
 		io_uring_for_each_cqe (&q->ring, head, cqe) {
 			(void)cqe;
@@ -346,12 +360,23 @@ static void *
 io_thread_main(void *arg)
 {
 	struct qublk_dev *dev = arg;
+	struct qublk_queue *q = &dev->q;
+	int rc;
+
+	rc = init_ring(q);
+	if (rc < 0) {
+		fprintf(stderr, "io_uring_queue_init(io): %s\n", strerror(-rc));
+		dev->io_init_rc = rc;
+		sem_post(&dev->io_ready);
+		return NULL;
+	}
 
 	dev->io_init_rc = submit_initial_fetches(dev);
 	sem_post(&dev->io_ready);
 	if (dev->io_init_rc == 0) {
 		io_loop(dev);
 	}
+	io_uring_queue_exit(&q->ring);
 	return NULL;
 }
 
