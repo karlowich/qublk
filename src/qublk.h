@@ -32,6 +32,8 @@ struct qublk_queue {
 	struct xnvme_queue *xq;
 	struct qublk_io *ios;
 	struct qublk_dev *dev;
+	pthread_t tid;
+	int init_rc;
 };
 
 struct qublk_dev {
@@ -44,10 +46,8 @@ struct qublk_dev {
 	struct xnvme_dev *xdev;
 	const struct xnvme_geo *geo;
 	uint8_t lba_shift;
-	struct qublk_queue q;
-	pthread_t io_tid;
+	struct qublk_queue *queues;
 	sem_t io_ready;
-	int io_init_rc;
 	volatile sig_atomic_t stop;
 };
 
