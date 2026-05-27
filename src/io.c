@@ -35,10 +35,11 @@ init_ring(struct qublk_queue *q)
 }
 
 static void
-prep_io_uring_cmd(struct io_uring_sqe *sqe, int fd, uint32_t cmd_op,
-		  const struct ublksrv_io_cmd *cmd, uint64_t user_data)
+prep_io_uring_cmd(struct io_uring_sqe *sqe, uint32_t cmd_op, const struct ublksrv_io_cmd *cmd,
+		  uint64_t user_data)
 {
-	io_uring_prep_rw(IORING_OP_URING_CMD, sqe, fd, NULL, 0, 0);
+	io_uring_prep_rw(IORING_OP_URING_CMD, sqe, 0, NULL, 0, 0);
+	sqe->flags = IOSQE_FIXED_FILE;
 	sqe->cmd_op = cmd_op;
 	memcpy(sqe->cmd, cmd, sizeof(*cmd));
 	sqe->user_data = user_data;
@@ -59,7 +60,7 @@ submit_fetch(struct qublk_queue *q, struct qublk_io *io)
 	if (!sqe) {
 		return -EAGAIN;
 	}
-	prep_io_uring_cmd(sqe, q->ublkc_fd, UBLK_U_IO_FETCH_REQ, &cmd, io->tag);
+	prep_io_uring_cmd(sqe, UBLK_U_IO_FETCH_REQ, &cmd, io->tag);
 	return 0;
 }
 
@@ -78,7 +79,7 @@ submit_commit_and_fetch(struct qublk_queue *q, struct qublk_io *io, int result)
 	if (!sqe) {
 		return -EAGAIN;
 	}
-	prep_io_uring_cmd(sqe, q->ublkc_fd, UBLK_U_IO_COMMIT_AND_FETCH_REQ, &cmd, io->tag);
+	prep_io_uring_cmd(sqe, UBLK_U_IO_COMMIT_AND_FETCH_REQ, &cmd, io->tag);
 	return 0;
 }
 
@@ -368,6 +369,15 @@ io_thread_main(void *arg)
 		fprintf(stderr, "io_uring_queue_init(io): %s\n", strerror(-rc));
 		dev->io_init_rc = rc;
 		sem_post(&dev->io_ready);
+		return NULL;
+	}
+
+	rc = io_uring_register_files(&q->ring, &q->ublkc_fd, 1);
+	if (rc < 0) {
+		fprintf(stderr, "io_uring_register_files: %s\n", strerror(-rc));
+		dev->io_init_rc = rc;
+		sem_post(&dev->io_ready);
+		io_uring_queue_exit(&q->ring);
 		return NULL;
 	}
 
