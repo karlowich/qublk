@@ -142,7 +142,8 @@ qublk_ctrl_set_params(struct qublk_dev *dev)
 		.types = UBLK_PARAM_TYPE_BASIC,
 		.basic =
 			{
-				.attrs = UBLK_ATTR_VOLATILE_CACHE | UBLK_ATTR_FUA,
+				.attrs = dev->has_vwc ? (UBLK_ATTR_VOLATILE_CACHE | UBLK_ATTR_FUA)
+						      : 0,
 				.logical_bs_shift = lba_shift,
 				.physical_bs_shift = lba_shift,
 				.io_opt_shift = lba_shift,

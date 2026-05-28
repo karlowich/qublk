@@ -135,6 +135,11 @@ main(int argc, char **argv)
 		goto err_xdev;
 	}
 
+	{
+		const struct xnvme_spec_idfy_ctrlr *ctrlr = xnvme_dev_get_ctrlr(dev.xdev);
+		dev.has_vwc = ctrlr ? (uint8_t)ctrlr->vwc.present : 1;
+	}
+
 	cap_max = dev.geo->mdts_nbytes ? dev.geo->mdts_nbytes : (1u << 20);
 	dev.max_io_buf = want_max_io ? want_max_io : (cap_max < (1u << 20) ? cap_max : (1u << 20));
 	if (dev.max_io_buf > cap_max) {
