@@ -33,7 +33,6 @@ lba_shift_of(uint32_t lba_nbytes)
 }
 
 static const struct option qublk_opts[] = {
-	{"dev-uri", required_argument, NULL, 'u'},
 	{"be", required_argument, NULL, 'b'},
 	{"depth", required_argument, NULL, 'd'},
 	{"dev-id", required_argument, NULL, 'i'},
@@ -47,10 +46,10 @@ static void
 usage(const char *prog)
 {
 	fprintf(stderr,
-		"usage: %s --dev-uri URI [--be BE] [--depth N] [--dev-id N] [--max-io-bytes N] "
+		"usage: %s URI [--be BE] [--depth N] [--dev-id N] [--max-io-bytes N] "
 		"[--nr-queues N]\n"
 		"  URI            xNVMe device URI (e.g. /dev/nvme0n1, 0000:01:00.0)\n"
-		"  BE             xNVMe backend (upcie, io_uring, io_uring_cmd, libaio, ...)\n"
+		"  --be BE        xNVMe backend (upcie, io_uring, io_uring_cmd, libaio, ...)\n"
 		"  --depth N      per-queue depth, power of 2 (default: 64)\n"
 		"  --dev-id N     requested ublk dev id (default: -1 / auto)\n"
 		"  --max-io-bytes N  per-IO buffer size (default: min(1MiB, MDTS))\n"
@@ -75,11 +74,8 @@ main(int argc, char **argv)
 	uint32_t want_max_io = 0, cap_max;
 	int c, sig;
 
-	while ((c = getopt_long(argc, argv, "u:b:d:i:m:q:h", qublk_opts, NULL)) != -1) {
+	while ((c = getopt_long(argc, argv, "b:d:i:m:q:h", qublk_opts, NULL)) != -1) {
 		switch (c) {
-		case 'u':
-			uri = optarg;
-			break;
 		case 'b':
 			be = optarg;
 			break;
@@ -103,10 +99,11 @@ main(int argc, char **argv)
 			return 2;
 		}
 	}
-	if (!uri) {
+	if (optind >= argc) {
 		usage(argv[0]);
 		return 2;
 	}
+	uri = argv[optind];
 	if (!is_pow2(dev.depth) || dev.depth > QUBLK_MAX_QUEUE_DEPTH) {
 		fprintf(stderr, "qublk: --depth must be power of 2, <= %u\n",
 			QUBLK_MAX_QUEUE_DEPTH);
