@@ -706,12 +706,28 @@ static void
 io_loop(struct qublk_queue *q)
 {
 	struct qublk_dev *dev = q->dev;
+	struct __kernel_timespec idle_ts = {.tv_nsec = 100 * 1000 * 1000};
 	struct io_uring_cqe *cqe;
 	unsigned head, count;
 	int xp;
 
 	while (!dev->stop) {
-		io_uring_submit_and_get_events(&q->ring);
+		/*
+		 * NVMe completions can only arrive while commands are in flight,
+		 * and the upcie backend has no completion fd to wait on -- so we
+		 * must busy-poll the xnvme queue whenever it has outstanding work.
+		 * When it is empty, the only events that can wake us are a new
+		 * ublk request (FETCH) or a peer queue's barrier MSG_RING, both of
+		 * which post to this ring's fd; block on it instead of spinning so
+		 * an idle queue does not pin a core away from the application. The
+		 * wait is bounded so the loop re-checks dev->stop -- shutdown sets
+		 * the flag from another thread without posting a CQE here.
+		 */
+		if (xnvme_queue_get_outstanding(q->xq) == 0) {
+			io_uring_submit_and_wait_timeout(&q->ring, &cqe, 1, &idle_ts, NULL);
+		} else {
+			io_uring_submit_and_get_events(&q->ring);
+		}
 
 		count = 0;
 		io_uring_for_each_cqe (&q->ring, head, cqe) {
@@ -722,7 +738,9 @@ io_loop(struct qublk_queue *q)
 			io_uring_cq_advance(&q->ring, count);
 		}
 
-		xnvme_queue_poke(q->xq, 0);
+		if (xnvme_queue_get_outstanding(q->xq)) {
+			xnvme_queue_poke(q->xq, 0);
+		}
 	}
 
 	/* Drain: keep pumping until xnvme queue empty and no more ublk CQEs. */
